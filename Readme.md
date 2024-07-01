@@ -2,7 +2,7 @@ Here's a `README.md` file to explain how to run the script, the implementation d
 
 ### README.md
 
-```markdown
+
 # Insurance Extraction API
 
 This project provides an API to extract specific information from text files, such as dwelling coverage and premium amounts. It uses various techniques including OCR, regex, and Named Entity Recognition (NER) to process the input files.
@@ -195,7 +195,7 @@ Here's an example of how to send a request to one of the endpoints using `curl`:
 curl -X POST "http://127.0.0.1:8000/regex/extract_regex" -H "Content-Type: application/json" -d '{"path": "/path/to/your/textfile.txt"}'
 ```
 
-```
+
 
 ### Explanation
 
