@@ -28,8 +28,8 @@ This project provides an API to extract specific information from text files, su
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-repo/insurance-extraction-api.git
-   cd insurance-extraction-api
+   git clone https://github.com/rizwansaleem01/integrity_parser.git
+   cd integrity_parser
    ```
 
 2. Create a virtual environment and activate it:
@@ -178,8 +178,8 @@ Content-Type: application/json
 - **main.py**: Main entry point for the FastAPI application, including the router setup.
 - **ocr_extraction.py**: Contains the endpoint for extracting text from PDF files using OCR.
 - **regex_extraction.py**: Contains the endpoint for extracting information using regex patterns.
-- **ner_extraction.py**: Contains the endpoint for extracting information using Named Entity Recognition (NER).
-- **ner_extraction_money.py**: Contains the enhanced NER endpoint for extracting monetary amounts with context.
+- **ner_extraction.py**: Contains the endpoint for extracting information using Named Entity Recognition (NER) where custom matching patterns has been used for extraction of required features.
+- **ner_extraction_money.py**: Contains the enhanced NER endpoint for extracting monetary amounts with context for extracting features by applying rules using the context around them.
 - **utils.py**: Contains shared utilities, such as the `FilePath` model and the `read_text_from_file` function.
 
 ### Centralized Utilities
