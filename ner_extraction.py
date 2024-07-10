@@ -1,4 +1,5 @@
 import spacy
+from spacy.matcher import Matcher
 import re
 from fastapi import APIRouter
 from utils import FilePath, read_text_from_file
@@ -13,20 +14,6 @@ except OSError:
     download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
 
-regex_pattern_dwelling = r"""
-    (?:Dwelling|dwlg|DWELLING)         # Match variations of "Dwelling"
-    .*?                                # Match any characters (non-greedy)
-    \$?                                # Optional "$" symbol
-    (\d[\d,.]*)                        # Capture numeric value
-    """
-
-regex_pattern_final_premium = r"""
-    (?:total\sannual\spremium|total\spremium|annual\spremium)  # Match variations of "total annual premium" or "total premium"
-    .*?                                        # Match any characters (non-greedy)
-    \$?                                        # Optional "$" symbol
-    (\d[\d,.]*)                                # Capture numeric value
-    """
-
 def clean_text(text):
     cleaned_text = re.sub(r"[-=]+", " ", text)
     cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
@@ -34,40 +21,62 @@ def clean_text(text):
 
 @router.post("/extract_ner")
 async def extract_ner(file_path: FilePath):
-    text = read_text_from_file(file_path.path)
+    ner_text = read_text_from_file(file_path.path)
+    matcher = Matcher(nlp.vocab)
 
-    doc = nlp(clean_text(text))
+    # Define updated patterns
+    pattern_dwelling = [
+        {"LOWER": {"IN": ["dwelling", "dwlg", "dwelling."]}},
+        {"IS_PUNCT": True, "OP": "?"},
+        {"IS_ASCII": True, "OP": "*", "IS_PUNCT": False, "IS_SPACE": False},
+        {"TEXT": {"REGEX": r"^\$?\d[\d,]*\.?\d*$"}}
+    ]
+
+    pattern_premium = [
+        {"LOWER": {"IN": ["total", "annual", "total.", "annual."]}},
+        {"LOWER": "premium"},
+        {"IS_PUNCT": True, "OP": "?"},
+        {"IS_ASCII": True, "OP": "*", "IS_PUNCT": False, "IS_SPACE": False},
+        {"TEXT": {"REGEX": r"^\$?\d[\d,]*\.?\d*$"}}
+    ]
+
     dwelling_feat = []
     premium_feat = []
 
-    for ent in doc.ents:
-        if ent.label_ == 'MONEY':
-            value = ent.text
+    doc = nlp(clean_text(ner_text))
 
-            # get left words
-            left_words = []
-            for i in range(max(ent.start - 10, 0), ent.start):
-                left_words.append(doc[i].text)
+    matcher.add("DWELLING_PATTERN", [pattern_dwelling])
+    matcher.add("PREMIUM_PATTERN", [pattern_premium])
 
-            # get right words
-            right_words = []
-            for i in range(ent.end, min(ent.end + 10, len(doc))):
-                right_words.append(doc[i].text)
+    matches = matcher(doc)
 
-            context = " ".join(left_words + [value] + right_words)
+    for match_id, start, end in matches:
+        if match_id == nlp.vocab.strings["DWELLING_PATTERN"]:
+            dwell_amt = extract_numeric_value(doc, start, end, exclude_keywords=["premium"])
+            if dwell_amt:
+                dwelling_feat.append(dwell_amt)
 
-            match_dwelling = re.search(regex_pattern_dwelling, context, re.IGNORECASE | re.VERBOSE)
+        elif match_id == nlp.vocab.strings["PREMIUM_PATTERN"]:
+            prem_amt = extract_numeric_value(doc, start, end, exclude_keywords=["dwelling"])
+            if prem_amt:
+                premium_feat.append(prem_amt)
 
-            if match_dwelling:
-                dwell_amt = match_dwelling.group(1).replace(',', '')
-                dwelling_feat.append(float(dwell_amt))
-
-            match_premium = re.search(regex_pattern_final_premium, context, re.IGNORECASE | re.VERBOSE)
-            if match_premium:
-                prem_amt = match_premium.group(1).replace(',', '')
-                premium_feat.append(float(prem_amt))
 
     max_dwelling = max(dwelling_feat, key=float) if dwelling_feat else None
     max_premium = max(premium_feat, key=float) if premium_feat else None
 
-    return {"dwelling_feat": max_dwelling, "premium_feat": max_premium}
+    return {
+        "dwelling_feat": max_dwelling,
+        "premium_feat": max_premium
+    }
+
+def extract_numeric_value(doc, start, end, exclude_keywords=[]):
+    span_text = doc[start:end].text.lower()
+    if any(keyword in span_text for keyword in exclude_keywords):
+        return None
+    for token in doc[start:end]:
+        if token.text.startswith('$') and token.like_num:
+            return token.text[1:].replace(',', '')  # Remove '$' and replace commas
+        elif token.like_num:
+            return token.text.replace(',', '')
+    return None
